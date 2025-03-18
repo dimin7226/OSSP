@@ -6,67 +6,9 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
-
-void Fork(char* argv[], char *env[], char *childFromEnviroment)
-{
-    pid_t pid = fork();
- 
-    if (pid == -1) 
-    {
-        fprintf(stderr, "Unable to fork\n");
-    }
-    else if (pid > 0) {
-
-        printf("I am parent %d\n", getpid());
-        printf("Child is %d\n", pid);
-
-        wait(NULL);
-    } 
-    else { //child
-        printf("In child program %s %s %s", childFromEnviroment, argv[0], argv[1]);
-        execve(childFromEnviroment, argv, env);
-    }
-}
-
-
-
-char* Increment(int *counter)
-{
- char* name = (char*)malloc(9*sizeof(char));
-
- strcpy(name, "child_");
-
- if(*counter>=0&&*counter<10)
- {
-    name[6]='0';
-    name[7]='0'+*counter;
-    name[8]='\0';
-    
-    (*counter)+=1;
- }
- if(*counter>=10&&*counter<=99)
- {
-    name[6]='0'+(*counter/10);
-    name[7]='0'+(*counter%10);
-    name[8]='\0';
-
-    (*counter)+=1;
-
-    if(*counter == 100) 
-        *counter = 0;
- }
-
- return name;
-
-}
-
-void PrintEnv(char* env[])
-{
-
-    for(int i = 0; env[i]!=NULL; i++)
-        printf("%s\n", env[i]);
-
-}
+void Fork(char* argv[], char *env[], char *childFromEnviroment);
+char* Increment(int *counter);
+void PrintEnv(char* env[]);
 
 int main(int argc, char* argv[], char* env[])
 {
@@ -159,3 +101,66 @@ while(true){
     
     return 0;
 }
+
+void Fork(char* argv[], char *env[], char *childFromEnviroment)
+{
+    pid_t pid = fork();
+ 
+    if (pid == -1) 
+    {
+        fprintf(stderr, "Unable to fork\n");
+    }
+    else if (pid > 0) {
+
+        printf("I am parent %d\n", getpid());
+        printf("Child is %d\n", pid);
+
+        wait(NULL);
+    } 
+    else { //child
+        printf("In child program %s %s %s", childFromEnviroment, argv[0], argv[1]);
+        execve(childFromEnviroment, argv, env);
+    }
+}
+
+
+
+char* Increment(int *counter)
+{
+ char* name = (char*)malloc(9*sizeof(char));
+
+ strcpy(name, "child_");
+
+ if(*counter>=0&&*counter<10)
+ {
+    name[6]='0';
+    name[7]='0'+*counter;
+    name[8]='\0';
+    
+    (*counter)+=1;
+ }
+ if(*counter>=10&&*counter<=99)
+ {
+    name[6]='0'+(*counter/10);
+    name[7]='0'+(*counter%10);
+    name[8]='\0';
+
+    (*counter)+=1;
+
+    if(*counter == 100) 
+        *counter = 0;
+ }
+
+ return name;
+
+}
+
+void PrintEnv(char* env[])
+{
+
+    for(int i = 0; env[i]!=NULL; i++)
+        printf("%s\n", env[i]);
+
+}
+
+
