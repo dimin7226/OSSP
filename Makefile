@@ -1,60 +1,42 @@
 CC = gcc
-CFLAGS = -std=c11 -g2 -ggdb -pedantic -W -Wall -Wextra 
+CFLAGS = -std=c11 -pedantic -Wall -Wextra -Werror -Wno-unused-parameter
 
-.SUFFIXES:
-.SUFFIXES: .c .o
+# Режим сборки (по умолчанию debug)
+MODE ?= debug
 
-DEBUG   = build/debug
-RELEASE = build/release
-OUT_DIR = $(DEBUG)
-OBJ_DIR = $(DEBUG)
-
-ifeq ($(MODE), release)
-  CFLAGS = -std=c11 -pedantic -W -Wall -Wextra -Wno-unused-parameter -Werror
-  OUT_DIR = $(RELEASE)
-  OBJ_DIR = $(RELEASE)
+# Настройка флагов в зависимости от режима
+ifeq ($(MODE),release)
+    CFLAGS += -O2
+    BUILD_DIR = build/release
+else
+    CFLAGS += -O0 -g3
+    BUILD_DIR = build/debug
 endif
 
-SRC_DIR = src
-SOURCES = $(wildcard $(SRC_DIR)/*.c)
-OBJECTS = $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(SOURCES))
+CHILD = src/child.c
+_PARENT = parent.c
+PARENT = $(patsubst %,src/%,$(_PARENT))
 
-parent = $(OUT_DIR)/parent
-child = $(OUT_DIR)/child
+# Цели по умолчанию
+all: child parent
 
-all: $(parent) $(child) setenv
+# Создаем каталог для сборки
+$(BUILD_DIR):
+	mkdir -p $(BUILD_DIR)
 
-$(parent): $(OBJ_DIR)/parent.o
-	@mkdir -p $(OUT_DIR)
-	$(CC) $(CFLAGS) $(OBJ_DIR)/parent.o -o $@
-	@echo "Compiled $(parent)"
+# Правила для сборки
+child: $(CHILD) | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -o $(BUILD_DIR)/$@ $^
 
-$(child): $(OBJ_DIR)/child.o
-	@mkdir -p $(OUT_DIR)
-	$(CC) $(CFLAGS) $(OBJ_DIR)/child.o -o $@
-	@echo "Compiled $(child)"
+parent: $(PARENT) | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -o $(BUILD_DIR)/$@ $^
 
-$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
-	@mkdir -p $(OBJ_DIR)
-	$(CC) -c $(CFLAGS) $< -o $@
-
-.PHONY: setenv
-setenv:
-	@echo "Setting environment variables..."
-	@if ! grep -q "export CHILD_PATH=" ~/.bashrc; then echo "export CHILD_PATH=$(OUT_DIR)/child" >> ~/.bashrc; fi
-	@if ! grep -q "export ENV_PATH=" ~/.bashrc; then echo "export ENV_PATH=$(OUT_DIR)/env.txt" >> ~/.bashrc; fi
-	@if ! grep -q "export LC_COLLATE=" ~/.bashrc; then echo "export LC_COLLATE=C" >> ~/.bashrc; fi
-	@echo "Environment variables saved in ~/.bashrc. Run 'source ~/.bashrc' to apply changes."
-
-.PHONY: unsetenv
-unsetenv:
-	@echo "Removing environment variables..."
-	@sed -i '/export CHILD_PATH=/d' ~/.bashrc
-	@sed -i '/export ENV_PATH=/d' ~/.bashrc
-	@sed -i '/export LC_COLLATE=/d' ~/.bashrc
-	@echo "Environment variables removed from ~/.bashrc. Run 'source ~/.bashrc' to apply changes."
+.PHONY: run
+run: clean all
+	CHILD_PATH=$(BUILD_DIR)/child $(BUILD_DIR)/parent "env.txt"
 
 .PHONY: clean
-clean: unsetenv
-	@rm -rf $(DEBUG) $(RELEASE)
-	@echo "Cleaned build files."
+clean:
+	rm -rf build
+
+.PHONY: all

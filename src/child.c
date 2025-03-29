@@ -1,30 +1,33 @@
-#include "stdio.h"
+#include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <string.h>
+#include <errno.h>
 
-int main(int argc, char* argv[])
-{
-    printf("%s pid: %d ppid: %d \n", argv[0], getpid(), getppid());
+#include <unistd.h>
 
-    FILE *fp;
-    fp = fopen(argv[1], "r");
-    
-    char* key = (char*) malloc(255*sizeof(char));
-    char* key_tmp = (char*) malloc(255*sizeof(char));
+int main(int argc, char* argv[], char* envp[]) {
+  if (argc != 2) {
+    fprintf(stderr, "%d is invalid arguments amount, must be 2\n", argc);
+    exit(EXIT_FAILURE);
+  }
 
+  puts("Child process data:");
+  printf("Name: %s\n", argv[0]);
+  printf("Pid: %d\n", getpid());
+  printf("Ppid: %d\n", getppid());
 
-    while(!feof(fp))
-    {
-        fscanf(fp, "%s", key);
-        if(!strcmp(key, key_tmp))
-            break;
-        printf("|%s = %s \n", key, getenv(key));
-        strcpy(key_tmp, key);
-    }
+  const int MAX_SIZE = 256;
+  char      buffer[MAX_SIZE];
+  FILE* fenvp = fopen(argv[1], "r");
+  if (!fenvp) {
+    perror("fenvp");
+    exit(errno);
+  }
+  while (fgets(buffer, MAX_SIZE, fenvp) != NULL) {
+    buffer[strcspn(buffer, "\n")] = '\0';
+    printf("%s=%s\n", buffer, getenv(buffer));
+  }
 
-    fclose(fp);
-
-    return 0;
-
+  fclose(fenvp);
+  exit(EXIT_SUCCESS);
 }

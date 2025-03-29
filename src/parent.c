@@ -1,166 +1,135 @@
-#include<stdio.h>
-#include<stdlib.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
-#include<unistd.h>
-#include<stdbool.h>
-#include <sys/types.h>
-#include <sys/wait.h>
+#include <errno.h>
 
-void Fork(char* argv[], char *env[], char *childFromEnviroment);
-char* Increment(int *counter);
-void PrintEnv(char* env[]);
+#include <wait.h>
+#include <unistd.h>
 
-int main(int argc, char* argv[], char* env[])
-{
-PrintEnv(env);
+const char child_path[] = "CHILD_PATH";
 
-char **newArgv = (char**)malloc(2*sizeof(char*));
-newArgv[0]=(char*)malloc(256*sizeof(char));
-newArgv[1]=(char*)malloc(256*sizeof(char));
+extern char** environ;
+extern const char child_path[];
 
-strcpy(newArgv[1], getenv("ENV_PATH"));
+void print_envp(char* envp[]);
+char** create_child_env(char* fenvp);
 
-int counter = 0;
-bool flag = true;
+char* search_child_path(char** str_arr);
 
-while(true){
-    if(flag){
-    printf("\n\n\nHello! This is the parent process. \n");
-    printf("new process: '+','*' or '&' \n");
-    printf("'q' - exit \n");
-    flag = false;
+int main(int argc, char* argv[], char* envp[]) {
+  if (argc != 2) {
+    fprintf(stderr, "%d is invalid amount of arguments, must be 2\n", argc);
+    exit(EXIT_FAILURE);
+  }
+
+  print_envp(envp);
+  char* const* env = create_child_env(argv[1]);
+
+  size_t child_count = 0;
+  int    opt;
+  while (1) {
+    printf("[+] - child process with getenv()\n"
+           "[*] - child process with envp[]\n"
+           "[&] - child process with environ\n"
+           "[q] - exit\n"
+           ">");
+    opt = getchar();
+    getchar();
+
+    if (opt == 'q') {
+      exit(EXIT_SUCCESS);
     }
-    else 
-        flag = true;
-
-    rewind(stdin);
-    char ch;
-    scanf("%c", &ch);
-    rewind(stdin);
-    switch(ch)
-    {
-        case '+': 
-        {
-            char* childFromEnviroment = getenv("CHILD_PATH");
-            strcpy(newArgv[0], Increment(&counter));
-            Fork(newArgv, env, childFromEnviroment);
-            break;
-        }
-        case '*':
-        {
-            char* childFromEnviroment = (char*)malloc(256*sizeof(char));
-            char* tmp = (char*)malloc(256*sizeof(char));
-
-            for(int i = 0; env[i]!=NULL; i++)
-            {
-                tmp = env[i];
-                char* ptr = strstr(tmp, "CHILD_PATH");
-
-                if(ptr != NULL && ptr == tmp)
-                {
-                    strcpy(childFromEnviroment, tmp + 11);
-                    break;
-                }
-            }
-
-            strcpy(newArgv[0], Increment(&counter));
-            Fork(newArgv, env, childFromEnviroment);
-            break;
-        }
-        case '&':
-        {
-            extern char** environ;
-
-            char* childFromEnviroment = (char*)malloc(256*sizeof(char));
-            char* tmp = (char*)malloc(256*sizeof(char));
-
-            for(int i = 0; environ[i]!=NULL; i++)
-            {
-                tmp = environ[i];
-                char* ptr = strstr(tmp, "CHILD_PATH");
-
-                if(ptr != NULL && ptr == tmp)
-                {
-                    strcpy(childFromEnviroment, tmp + 11);
-                    break;
-                }
-            }
-            strcpy(newArgv[0], Increment(&counter));
-            Fork(newArgv, env, childFromEnviroment);
-
-            break;
-        }
-        case 'q':
-        {
-            exit(0);
-        }
-        default: break;
+    if (opt != '+' && opt != '*' && opt != '&') {
+      continue;
     }
 
-}
-    
-    return 0;
-}
+    char* child_process = NULL;
+    switch ((char) opt) {
+      case '+':
+        child_process = getenv(child_path);
+        break;
 
-void Fork(char* argv[], char *env[], char *childFromEnviroment)
-{
+      case '*':
+        child_process = search_child_path(envp);
+        break;
+
+      case '&':
+        child_process = search_child_path(environ);
+        break;
+    }
+
+    char child_name[10];
+    sprintf(child_name, "child_%zu", child_count++);
+
+    char* const args[] = {child_name, argv[1], NULL};
+
     pid_t pid = fork();
- 
-    if (pid == -1) 
-    {
-        fprintf(stderr, "Unable to fork\n");
+    if (pid > 0) {
+      int status;
+      wait(&status);
+    } else if (pid == 0) {
+      if (execve(child_process, args, env) == -1) {
+        perror("execve");
+        exit(errno);
+      }
+    } else {
+      perror("fork");
+      exit(errno);
     }
-    else if (pid > 0) {
+  }
+}
 
-        printf("I am parent %d\n", getpid());
-        printf("Child is %d\n", pid);
+static int qsort_cmp(const void* str1, const void* str2) {
+  return strcmp(*(const char**) str1, *(const char**) str2);
+}
 
-        wait(NULL);
-    } 
-    else { //child
-        printf("In child program %s %s %s", childFromEnviroment, argv[0], argv[1]);
-        execve(childFromEnviroment, argv, env);
+void print_envp(char* envp[]) {
+  size_t envpc = 0;
+  while (envp[envpc]) {
+    ++envpc;
+  }
+
+  qsort(envp, envpc, sizeof(char*), qsort_cmp);
+
+  puts("Parent environment variables:");
+  for (size_t i = 0; i < envpc; ++i) {
+    puts(envp[i]);
+  }
+}
+
+char** create_child_env(char* fenvp) {
+  FILE* stream = fopen(fenvp, "r");
+  if (!stream) {
+    perror("fopen");
+    exit(errno);
+  }
+
+  char** env = malloc(sizeof(char*));
+  size_t i = 0;
+
+  const int MAX_SIZE = 256;
+  char      buffer[MAX_SIZE];
+  while (fgets(buffer, MAX_SIZE, stream) != NULL) {
+    buffer[strcspn(buffer, "\n")] = '\0';
+
+    char* env_val = getenv(buffer);
+    if (env_val) {
+      env[i] = malloc((strlen(buffer) + strlen(env_val) + 2) * sizeof(char));
+      strcat(strcat(strcpy(env[i], buffer), "="), env_val);
+      env = realloc(env, (++i + 1) * sizeof(char*));
     }
+  }
+  env[i] = NULL;
+
+  return env;
 }
 
-
-
-char* Increment(int *counter)
-{
- char* name = (char*)malloc(9*sizeof(char));
-
- strcpy(name, "child_");
-
- if(*counter>=0&&*counter<10)
- {
-    name[6]='0';
-    name[7]='0'+*counter;
-    name[8]='\0';
-    
-    (*counter)+=1;
- }
- if(*counter>=10&&*counter<=99)
- {
-    name[6]='0'+(*counter/10);
-    name[7]='0'+(*counter%10);
-    name[8]='\0';
-
-    (*counter)+=1;
-
-    if(*counter == 100) 
-        *counter = 0;
- }
-
- return name;
-
+char* search_child_path(char** str_arr) {
+  while (*str_arr) {
+    if (!strncmp(*str_arr,  "CHILD_PATH", strlen( "CHILD_PATH"))) {
+      return *str_arr + strlen("CHILD_PATH") + 1;
+    }
+    ++str_arr;
+  }
+  return NULL;
 }
-
-void PrintEnv(char* env[])
-{
-
-    for(int i = 0; env[i]!=NULL; i++)
-        printf("%s\n", env[i]);
-
-}
-
-
