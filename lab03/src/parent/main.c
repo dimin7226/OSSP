@@ -15,9 +15,6 @@ int main(void) {
          "[-] - kill last child process\n"
          "[l] - list parent and child processes\n"
          "[k] - kill all child processes\n"
-         "[s] <num> - stop statistic\n"
-         "[g] <num> - resume statistic\n"
-         "[p] num - print C_{num} statistic and freeze other childs\n"
          "[q] - exit\n"
          ">");
   while (1) {
@@ -50,30 +47,6 @@ int main(void) {
         } else {
           puts("No child processes to kill");
         }
-        break;
-
-      case 's':
-        call_corresponding_proc(stop_stat, stop_all_stat);
-        break;
-
-      case 'g':
-        call_corresponding_proc(resume_stat, resume_all_stat);
-        break;
-
-      case 'p':
-        if (!is_number_in_stdin()) {
-          fputs("Invalid command! Correct form is p<num>", stderr);
-          exit(EXIT_FAILURE);
-        }
-        size_t num = read_size_t();
-        
-        if (!validate_num(num)) {
-          break;
-        }
-
-        stop_all_stat();
-        print_stat(child_array[num]);
-        alarm(P_NUM_SEC_TIMER);
         break;
 
       case 'q':
