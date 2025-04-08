@@ -25,8 +25,8 @@ void create_child(void) {
       // Child process
       char child_name[8];
       sprintf(child_name, "C_%zu", amount);
-      if (execl("./child", child_name, NULL) == -1) {
-        perror("execl");
+      if (execlp("./child", child_name, NULL) == -1) {
+        perror("execlp");
         exit(errno);
       }
     }
@@ -50,8 +50,10 @@ pid_t kill_last_child(void) {
     fputs("child_array is empty", stderr);
     exit(EXIT_FAILURE);
   }
-  send_signal(child_array[--amount], PARENT_KILL);
-  return wait(NULL);
+  pid_t pid = child_array[--amount].pid;
+  send_signal(child_array[amount], PARENT_KILL);
+  waitpid(pid, NULL, 0);
+  return pid;
 }
 
 void stop_stat(child_t* child) {
@@ -128,7 +130,7 @@ void child_handler(int sig, siginfo_t* info, void* context) {
       break;
 
     case CHILD_INFORM:
-      printf("%d informed parent\n", child_array[i].pid);
+      printf("Child with ppid=%d, pid=%d informed parent\n", getpid(), child_array[i].pid);
       break;
 
     default:
